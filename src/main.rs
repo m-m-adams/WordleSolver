@@ -1,9 +1,8 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use std::{
     fs::File,
     io::{prelude::*, BufReader},
     path::Path,
-    str,
     time::Instant,
 };
 
@@ -20,12 +19,19 @@ fn lines_from_file(filename: impl AsRef<Path>) -> Vec<String> {
 fn main() -> Result<()> {
     let words = lines_from_file("wordlist.txt");
 
-    let mut wordle = Wordle::new(words[0..500].to_vec(), "affix");
     let now = Instant::now();
-    let f = &wordle.guess();
-    let first = str::from_utf8(f)?;
 
-    println!("{}", now.elapsed().as_micros());
-    println!("first guess is {first}");
+    for w in words.clone() {
+        let mut wordle = Wordle::new(words.to_vec(), &w);
+        let (f, guess) = wordle.solve()?;
+        if f != w {
+            bail!("failed to solve {w}, got {f}");
+        }
+
+        println!("{f}, {guess}");
+    }
+
+    println!("took {} ms", now.elapsed().as_millis());
+
     Ok(())
 }

@@ -1,6 +1,5 @@
 use anyhow::Result;
-use std::collections::HashSet;
-use std::str;
+use std::{collections::HashMap, str};
 type Word = [u8; 5];
 
 fn word_from_str(s: &str) -> Result<Word> {
@@ -11,49 +10,104 @@ fn word_from_str(s: &str) -> Result<Word> {
 
 #[derive(Debug, Clone)]
 pub struct Wordle {
-    _guess: usize,
+    guess: usize,
     answer: Word,
+    guesses: Vec<Word>,
     wordlist: Vec<Word>,
-    state: WordleState,
+    pub state: WordleState,
 }
+
 #[derive(Debug, Clone)]
-struct WordleState {
-    known: [Option<u8>; 5],
-    contains: HashSet<u8>,
-    not_contains: HashSet<u8>,
+pub struct WordleState {
+    pub known: [Option<u8>; 5],
+    pub contains: Vec<u8>,
+    pub not_contains: Vec<u8>,
 }
+#[derive(Hash, Eq, PartialEq, Debug, Clone, Copy)]
+enum Wr {
+    Green,
+    Yellow,
+    Grey,
+}
+
+type WordleResult = [Wr; 5];
 
 impl Wordle {
     pub fn new(wordlist: Vec<String>, answer: &str) -> Wordle {
         Wordle {
-            _guess: 0,
+            guess: 0,
             answer: word_from_str(answer).expect("wrong answer length"),
             wordlist: wordlist
                 .iter()
                 .map(|word| word_from_str(word).expect("wrong answer length"))
                 .collect(),
+            guesses: vec![],
             state: WordleState {
                 known: [None; 5],
-                contains: vec![].into_iter().collect(),
-                not_contains: vec![].into_iter().collect(),
+                contains: vec![],
+                not_contains: vec![],
             },
         }
     }
+
+    pub fn solve(&mut self) -> Result<(String, usize)> {
+        let first_guess = word_from_str("raise")?;
+        let (state, _) = self.evaluate(&first_guess, &self.answer);
+        self.update_state(state);
+        self.guess = 1;
+        let guess = loop {
+            let guess = self.guess();
+            let (state, res) = self.evaluate(&guess, &self.answer);
+            self.update_state(state);
+            println!("{:?}", res);
+            for word in &self.wordlist {
+                let w = str::from_utf8(word).expect("not a word");
+                print!("{w:?}, ");
+            }
+            println!("");
+
+            self.guess += 1;
+            if self.wordlist.len() == 1 || self.guess > 6 {
+                break self.wordlist[0];
+            }
+        };
+
+        let answer = str::from_utf8(&guess)?;
+
+        Ok((answer.to_string(), self.guess))
+    }
+
+    pub fn update_state(&mut self, answer: WordleState) {
+        self.state = answer;
+        let remaining: Vec<Word> = self
+            .wordlist
+            .iter()
+            .cloned()
+            .filter(|w| Wordle::check_word(&self.state, w))
+            .collect();
+        self.wordlist = remaining;
+    }
+
     pub fn guess(&mut self) -> Word {
         let starting = (self.wordlist.len() as f32).log2();
         let mut best_score = 0.;
         let mut best_guess = b"     ";
         for guess in &self.wordlist {
             let mut score = 0.;
+            let mut result_lengths: HashMap<WordleResult, usize> = HashMap::new();
             for pot_answer in &self.wordlist {
-                let pot_state = self.evaluate(guess, pot_answer);
-                let pot_words = self
-                    .wordlist
-                    .iter()
-                    .cloned()
-                    .filter(|w| Wordle::check_word(&pot_state, w))
-                    .count();
-                let i_gain = starting - (pot_words as f32).log2();
+                let (pot_state, result) = self.evaluate(guess, pot_answer);
+                if !result_lengths.contains_key(&result) {
+                    let pot_words = self
+                        .wordlist
+                        .iter()
+                        .cloned()
+                        .filter(|w| Wordle::check_word(&pot_state, w))
+                        .count();
+                    result_lengths.insert(result.clone(), pot_words);
+                }
+
+                let i_gain = starting - (result_lengths[&result] as f32).log2();
                 score += i_gain;
             }
 
@@ -62,41 +116,31 @@ impl Wordle {
                 best_guess = guess;
             }
         }
-        let pot_state = self.evaluate(best_guess, &self.answer);
-        let remaining: Vec<Word> = self
-            .wordlist
-            .iter()
-            .cloned()
-            .filter(|w| Wordle::check_word(&pot_state, w))
-            .collect();
-        let remaining: Vec<String> = remaining
-            .iter()
-            .map(|a| str::from_utf8(a).expect("not a word").to_owned())
-            .collect();
-        for item in remaining {
-            print!("{item} ")
-        }
-        println!("");
-        println!("information gain is {best_score}");
+        let score = best_score / self.wordlist.len() as f32;
+        let guess = str::from_utf8(best_guess).expect("not a word");
+        println!("guessing {guess} gives score {score}");
         return *best_guess;
     }
 
-    fn evaluate(&self, guess: &Word, answer: &Word) -> WordleState {
-        let a = answer;
+    fn evaluate(&self, guess: &Word, answer: &Word) -> (WordleState, WordleResult) {
         debug_assert!(Wordle::check_word(&self.state, guess));
+        let mut wr: WordleResult = [Wr::Green; 5];
         let mut new_state = self.state.clone();
 
-        for (i, l) in guess.iter().enumerate() {
-            if *l == a[i] {
-                new_state.known[i] = Some(*l);
-            } else if a.contains(&l) {
-                new_state.contains.insert(*l);
+        for (i, c) in guess.iter().enumerate() {
+            if *c == answer[i] {
+                wr[i] = Wr::Green;
+                new_state.known[i] = Some(*c);
+            } else if answer.contains(&c) {
+                wr[i] = Wr::Yellow;
+                new_state.contains.push(*c);
             } else {
-                new_state.not_contains.insert(*l);
+                wr[i] = Wr::Grey;
+                new_state.not_contains.push(*c);
             }
         }
 
-        new_state
+        (new_state, wr)
     }
 
     //checks if a word is possible in a given state
