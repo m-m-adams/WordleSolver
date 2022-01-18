@@ -19,7 +19,7 @@ fn lines_from_file(filename: impl AsRef<Path>) -> Vec<String> {
 fn main() -> Result<()> {
     let words = lines_from_file("wordlist.txt");
 
-    let now = Instant::now();
+    //let now = Instant::now();
 
     for w in words.clone() {
         let mut wordle = Wordle::new(words.to_vec(), &w);
@@ -31,7 +31,7 @@ fn main() -> Result<()> {
         println!("{f}, {guess}");
     }
 
-    println!("took {} ms", now.elapsed().as_millis());
+    //println!("took {} ms", now.elapsed().as_millis());
 
     Ok(())
 }

@@ -59,15 +59,17 @@ impl Wordle {
             let guess = self.guess();
             let (state, res) = self.evaluate(&guess, &self.answer);
             self.update_state(state);
-            println!("{:?}", res);
-            for word in &self.wordlist {
-                let w = str::from_utf8(word).expect("not a word");
-                print!("{w:?}, ");
-            }
-            println!("");
+            // let g = str::from_utf8(&guess).expect("not a word");
+            // println!("{g} gives {res:?}");
+            // for word in &self.wordlist {
+            //     let w = str::from_utf8(word).expect("not a word");
+            //     print!("{w:?}, ");
+            // }
+            // println!("");
 
             self.guess += 1;
-            if self.wordlist.len() == 1 || self.guess > 6 {
+            self.guesses.push(guess);
+            if self.wordlist.len() == 1 {
                 break self.wordlist[0];
             }
         };
@@ -93,6 +95,9 @@ impl Wordle {
         let mut best_score = 0.;
         let mut best_guess = b"     ";
         for guess in &self.wordlist {
+            if self.guesses.contains(guess) {
+                continue;
+            }
             let mut score = 0.;
             let mut result_lengths: HashMap<WordleResult, usize> = HashMap::new();
             for pot_answer in &self.wordlist {
@@ -116,9 +121,8 @@ impl Wordle {
                 best_guess = guess;
             }
         }
-        let score = best_score / self.wordlist.len() as f32;
-        let guess = str::from_utf8(best_guess).expect("not a word");
-        println!("guessing {guess} gives score {score}");
+        let _score = best_score / self.wordlist.len() as f32;
+        let _guess = str::from_utf8(best_guess).expect("not a word");
         return *best_guess;
     }
 
