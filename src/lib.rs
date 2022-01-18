@@ -21,6 +21,7 @@ pub struct Wordle {
 pub struct WordleState {
     pub known: [Option<u8>; 5],
     pub contains: Vec<u8>,
+    pub not_contains_at: [Vec<u8>; 5],
     pub not_contains: Vec<u8>,
 }
 #[derive(Hash, Eq, PartialEq, Debug, Clone, Copy)]
@@ -46,18 +47,18 @@ impl Wordle {
                 known: [None; 5],
                 contains: vec![],
                 not_contains: vec![],
+                not_contains_at: [vec![], vec![], vec![], vec![], vec![]],
             },
         }
     }
 
-    pub fn solve(&mut self) -> Result<(String, usize)> {
-        let first_guess = word_from_str("raise")?;
+    pub fn solve(&mut self, first_guess: Word) -> Result<(String, usize)> {
         let (state, _) = self.evaluate(&first_guess, &self.answer);
         self.update_state(state);
         self.guess = 1;
         let guess = loop {
             let guess = self.guess();
-            let (state, res) = self.evaluate(&guess, &self.answer);
+            let (state, _) = self.evaluate(&guess, &self.answer);
             self.update_state(state);
             // let g = str::from_utf8(&guess).expect("not a word");
             // println!("{g} gives {res:?}");
@@ -138,6 +139,7 @@ impl Wordle {
             } else if answer.contains(&c) {
                 wr[i] = Wr::Yellow;
                 new_state.contains.push(*c);
+                new_state.not_contains_at[i].push(*c);
             } else {
                 wr[i] = Wr::Grey;
                 new_state.not_contains.push(*c);
@@ -151,6 +153,9 @@ impl Wordle {
     fn check_word(state: &WordleState, word: &Word) -> bool {
         for (i, letter) in word.iter().enumerate() {
             if state.not_contains.contains(&letter) {
+                return false;
+            }
+            if state.not_contains_at[i].contains(&letter) {
                 return false;
             }
             if let Some(l) = state.known[i] {

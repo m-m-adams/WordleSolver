@@ -18,12 +18,13 @@ fn lines_from_file(filename: impl AsRef<Path>) -> Vec<String> {
 
 fn main() -> Result<()> {
     let words = lines_from_file("wordlist.txt");
-
+    let mut wordle = Wordle::new(words.to_vec(), "aback");
+    let first_guess = wordle.guess();
     //let now = Instant::now();
 
     for w in words.clone() {
         let mut wordle = Wordle::new(words.to_vec(), &w);
-        let (f, guess) = wordle.solve()?;
+        let (f, guess) = wordle.solve(first_guess)?;
         if f != w {
             bail!("failed to solve {w}, got {f}");
         }
